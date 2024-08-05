@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Stats</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #cpu, #memory {
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="cpu">
+        <h2>CPU Usage</h2>
+        <ul id="cpu-list"></ul>
+    </div>
+    <div id="memory">
+        <h2>Memory Usage</h2>
+        <ul id="memory-list"></ul>
+    </div>
+
+    <script>
+        async function fetchStats() {
+            try {
+                const response = await fetch('/test');
+                const data = await response.json();
+
+                // Update CPU usage
+                const cpuList = document.getElementById('cpu-list');
+                cpuList.innerHTML = '';
+                data.cpu.forEach(cpu => {
+                    const li = document.createElement('li');
+                    li.textContent = cpu;
+                    cpuList.appendChild(li);
+                });
+
+                // Update memory usage
+                const memoryList = document.getElementById('memory-list');
+                memoryList.innerHTML = '';
+                memoryList.innerHTML = `
+                    <li>Used memory: ${data.memory.UsedPercent.toFixed(1)}%</li>
+                    <li>Total memory: ${data.memory.TotalGB.toFixed(2)} GB</li>
+                    <li>Available memory: ${data.memory.AvailableGB.toFixed(2)} GB</li>
+                    <li>Used memory: ${data.memory.UsedGB.toFixed(2)} GB</li>
+                `;
+            } catch (error) {
+                console.error('Error fetching system stats:', error);
+            }
+        }
+
+        // Fetch stats every second
+        setInterval(fetchStats, 1000);
+
+        // Initial fetch
+        fetchStats();
+    </script>
+</body>
+</html>

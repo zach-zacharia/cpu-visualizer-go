@@ -2,115 +2,67 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"time"
+	"net/http"
 
-	"github.com/gizak/termui/v3"
-	"github.com/gizak/termui/v3/widgets"
+	"github.com/gin-gonic/gin"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/mem"
 )
 
 func main() {
-	if err := termui.Init(); err != nil {
-		log.Fatalf("failed to initialize termui: %v", err)
-	}
-	defer termui.Close()
+	server := gin.Default()
 
-	// CPU percentages
-	cpu_usage := widgets.NewParagraph()
-	cpu_usage.Title = "CPU Usage"
-	cpu_usage.SetRect(0, 0, 50, 10)
-	cpu_usage.TextStyle.Fg = termui.ColorWhite
-	cpu_usage.BorderStyle.Fg = termui.ColorCyan
+	server.LoadHTMLGlob("static/*.html")
 
-	memory_usage := widgets.NewParagraph()
-	memory_usage.Title = "Memory usage"
-	memory_usage.SetRect(52, 0, 100, 10)
-	memory_usage.TextStyle.Fg = termui.ColorWhite
-	memory_usage.BorderStyle.Fg = termui.ColorCyan
+	server.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "index.html", nil)
+	})
 
-	memoryUpdateInterval := time.Second
-	cpuUpdateInterval := time.Second
-	tickercpu := time.NewTicker(cpuUpdateInterval)
-	tickermem := time.NewTicker(memoryUpdateInterval)
-	defer tickermem.Stop()
-	defer tickercpu.Stop()
-
-	uiEvents := termui.PollEvents()
-
-	for {
-		select {
-		case <-tickercpu.C:
-			percentages, err := cpu.Percent(0, true)
-			if err != nil {
-				fmt.Errorf("failed to get CPU usage: %v", err)
-			}
-
-			// Build the display text with percentages
-			text := ""
-			for i, perc := range percentages {
-				text += fmt.Sprintf("CPU%d: %.1f%%\n", i, perc)
-			}
-
-			// Update the paragraph widget with the new text
-			cpu_usage.Text = text
-
-			termui.Render(cpu_usage)
-
-		case <-tickermem.C:
-			memory, err := mem.VirtualMemory()
-			if err != nil {
-				fmt.Errorf("Failed to get memory usage: %v", err)
-			}
-
-			memoryUsage := []float64{
-				memory.UsedPercent,
-				bytesToGB(memory.Total),
-				bytesToGB(memory.Available),
-				bytesToGB(memory.Used),
-			}
-
-			memoryDataType := []string{
-				"Used memory (%)",
-				"Total memory (GB)",
-				"Available memory (GB)",
-				"Used memory (GB)",
-			}
-
-			isPercentage := []bool{
-				true,
-				false,
-				false,
-				false,
-			}
-
-			text := ""
-
-			for i, usage := range memoryUsage {
-				text += formatMemoryUsage(memoryDataType[i], usage, isPercentage[i])
-			}
-
-			memory_usage.Text = text
-
-			termui.Render(memory_usage)
-
-		case e := <-uiEvents:
-			if e.Type == termui.KeyboardEvent {
-				return
-			}
+	// Route to serve JSON data
+	server.GET("/test", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "test.html", nil)
+		data, err := getSystemStats()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
 		}
+		c.JSON(http.StatusOK, data)
+	})
+
+	server.Run(":7000")
+}
+
+func getSystemStats() (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// Get CPU usage
+	percentages, err := cpu.Percent(0, true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CPU usage: %v", err)
 	}
+	cpuUsage := make([]string, len(percentages))
+	for i, perc := range percentages {
+		cpuUsage[i] = fmt.Sprintf("CPU%d: %.1f%%", i, perc)
+	}
+	stats["cpu"] = cpuUsage
+
+	// Get memory usage
+	memory, err := mem.VirtualMemory()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get memory usage: %v", err)
+	}
+
+	memoryStats := map[string]interface{}{
+		"UsedPercent": memory.UsedPercent,
+		"TotalGB":     bytesToGB(memory.Total),
+		"AvailableGB": bytesToGB(memory.Available),
+		"UsedGB":      bytesToGB(memory.Used),
+	}
+	stats["memory"] = memoryStats
+
+	return stats, nil
 }
 
 func bytesToGB(bytes uint64) float64 {
 	return float64(bytes) / (1024 * 1024 * 1024) // 1 GB = 1024^3 bytes
-}
-
-func formatMemoryUsage(label string, value float64, isPercentage bool) string {
-	if isPercentage {
-		return fmt.Sprintf("%s: %.1f%%\n\n", label, value)
-	}
-	// For raw float values (e.g., in gigabytes), you might want to specify units
-	return fmt.Sprintf("%s: %.2f GB\n\n", label, value)
 }
