@@ -19,21 +19,30 @@ func main() {
 
 	// CPU percentages
 	cpu_usage := widgets.NewParagraph()
-	cpu_usage.Title = "CPU Usage"
+	cpu_usage.Title = "CPU usage"
 	cpu_usage.SetRect(0, 0, 50, 10)
 	cpu_usage.TextStyle.Fg = termui.ColorWhite
 	cpu_usage.BorderStyle.Fg = termui.ColorCyan
 
 	memory_usage := widgets.NewParagraph()
-	memory_usage.Title = "Memory usage"
-	memory_usage.SetRect(52, 0, 100, 10)
+	memory_usage.Title = "RAM usage"
+	memory_usage.SetRect(52, 11, 100, 21)
 	memory_usage.TextStyle.Fg = termui.ColorWhite
 	memory_usage.BorderStyle.Fg = termui.ColorCyan
 
+	swap_usage := widgets.NewParagraph()
+	swap_usage.Title = "Swap usage"
+	swap_usage.SetRect(52, 0, 100, 10)
+	swap_usage.TextStyle.Fg = termui.ColorWhite
+	swap_usage.BorderStyle.Fg = termui.ColorCyan
+
 	memoryUpdateInterval := time.Second
 	cpuUpdateInterval := time.Second
+	swapUpdateInterval := time.Second
 	tickercpu := time.NewTicker(cpuUpdateInterval)
 	tickermem := time.NewTicker(memoryUpdateInterval)
+	tickerswap := time.NewTicker(swapUpdateInterval)
+	defer tickerswap.Stop()
 	defer tickermem.Stop()
 	defer tickercpu.Stop()
 
@@ -95,6 +104,44 @@ func main() {
 
 			termui.Render(memory_usage)
 
+		case <-tickerswap.C:
+			{
+				swap, err := mem.SwapMemory()
+				if err != nil {
+					fmt.Errorf("Failed to get swap usage: %v", err)
+				}
+
+				swapUsage := []float64{
+					swap.UsedPercent,
+					bytesToGB(swap.Total),
+					bytesToGB(swap.Free),
+					bytesToGB(swap.Used),
+				}
+
+				swapDataType := []string{
+					"Used swap memory (%)",
+					"Total swap memory (GB)",
+					"Free swap memory (GB)",
+					"Used swap memory (GB)",
+				}
+
+				isPercentage := []bool{
+					true,
+					false,
+					false,
+					false,
+				}
+
+				text := ""
+
+				for i, usage := range swapUsage {
+					text += formatMemoryUsage(swapDataType[i], usage, isPercentage[i])
+				}
+
+				swap_usage.Text = text
+
+				termui.Render(swap_usage)
+			}
 		case e := <-uiEvents:
 			if e.Type == termui.KeyboardEvent {
 				return
